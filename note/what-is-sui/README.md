@@ -425,9 +425,9 @@ Sui 代表了區塊鏈技術的重大演進，它不僅解決了傳統區塊鏈�
 在理解 Sui 的基本概念後，建議按以下順序深入學習：
 
 1. [Sui 的物件模型](../what-is-object-model/README.md) - 理解核心架構
-2. [Move 程式語言基礎](../move-basics/README.md) - 學習開發工具
-3. [Sui 開發環境搭建](../development-setup/README.md) - 實戰準備
-4. [第一個 Sui 專案](../first-sui-project/README.md) - 動手實作
+2. [Move 程式語言基礎]() - 學習開發工具
+3. [Sui 開發環境搭建]() - 實戰準備
+4. [第一個 Sui 專案]() - 動手實作
 
 ## 相關資源
 

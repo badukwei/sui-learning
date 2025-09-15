@@ -404,8 +404,8 @@ Sui 的驗證機制代表了區塊鏈技術在安全性、效率性和可用性�
 在理解驗證機制後，建議繼續學習：
 
 1. [Sui 的物件模型](../what-is-object-model/README.md) - 了解驗證的對象
-2. [Move 程式語言](../move-basics/README.md) - 學習如何編寫可驗證的智能合約
-3. [Sui 開發實戰](../development-setup/README.md) - 實際操作驗證機制
+2. [Move 程式語言]() - 學習如何編寫可驗證的智能合約 
+3. [Sui 開發實戰]() - 實際操作驗證機制
 
 ## 相關資源
 
