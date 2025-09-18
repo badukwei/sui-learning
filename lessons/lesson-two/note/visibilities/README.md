@@ -1,4 +1,4 @@
-# Move 可見性系統（Visibility System）
+# Move 可見性（Visibility）
 
 ## 概述
 
