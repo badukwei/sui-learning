@@ -224,21 +224,6 @@ fun data_types_example() {
 }
 ```
 
-**複合型別**：
-
-```move
-fun composite_types() {
-    // 向量（Vector）
-    let numbers: vector<u64> = vector[1, 2, 3, 4, 5];
-
-    // 選項型別（Option）
-    let maybe_value: Option<u64> = option::some(42);
-
-    // 字串（String）
-    let text: String = string::utf8(b"Hello, Sui!");
-}
-```
-
 #### 5.2 可變性（Mutability）
 
 ```move
@@ -258,42 +243,374 @@ fun mutability_example() {
 
 ### 6. Common Design Patterns
 
-#### 6.1 物件創建模式
+#### 6.1 Data as Objects Pattern（資料作為物件模式）
+
+Sui Move 的核心設計哲學是將所有資料建模為物件，每個物件都有唯一的 ID 和明確的所有權。
 
 ```move
-// 基本物件創建
-public fun create_and_transfer(
+// 將遊戲角色建模為物件
+struct GameCharacter has key, store {
+    id: UID,
+    name: String,
+    level: u8,
+    experience: u64,
+    equipment: vector<ObjectID>, // 引用其他裝備物件
+}
+
+// 將遊戲道具建模為物件
+struct Equipment has key, store {
+    id: UID,
+    name: String,
+    item_type: u8, // 1=武器, 2=護甲, 3=飾品
+    attack_power: u64,
+    defense_power: u64,
+}
+```
+
+**優點**：
+
+-   每個物件都有獨立的生命週期
+-   支援並行處理
+-   清晰的所有權語義
+
+#### 6.2 Capabilities Pattern（能力證明模式）
+
+使用特殊的能力物件來控制存取權限，確保只有授權的操作才能執行。
+
+```move
+// 管理員能力證明
+struct AdminCap has key, store {
+    id: UID,
+}
+
+// 受保護的寶庫
+struct Treasury has key {
+    id: UID,
+    balance: u64,
+}
+
+// 只有擁有 AdminCap 的人才能提取資金
+public entry fun withdraw(
+    _: &AdminCap,           // 能力證明
+    treasury: &mut Treasury,
+    amount: u64,
+    recipient: address,
+    ctx: &mut TxContext
+) {
+    assert!(treasury.balance >= amount, 0);
+    treasury.balance = treasury.balance - amount;
+    // 執行提取邏輯...
+}
+
+// 初始化時創建管理員能力
+fun init(ctx: &mut TxContext) {
+    let admin_cap = AdminCap {
+        id: object::new(ctx),
+    };
+    transfer::public_transfer(admin_cap, tx_context::sender(ctx));
+}
+```
+
+**應用場景**：
+
+-   管理員權限控制
+-   特殊功能存取
+-   角色基礎存取控制
+
+#### 6.3 One-Time Witness Pattern（一次性見證模式）
+
+確保某個操作只能被執行一次，通常用於初始化或創建唯一資源。
+
+```move
+// 一次性見證結構
+struct ONE_TIME_WITNESS has drop {}
+
+// 代幣類型
+struct MyCoin has drop {}
+
+// 只能在模組初始化時執行一次
+fun init(otw: ONE_TIME_WITNESS, ctx: &mut TxContext) {
+    // 創建代幣元數據（只能創建一次）
+    let (treasury_cap, metadata) = coin::create_currency(
+        otw,
+        9, // 小數位數
+        b"MYC",
+        b"My Coin",
+        b"My custom coin",
+        option::none(),
+        ctx
+    );
+
+    // 轉移財政權給部署者
+    transfer::public_transfer(treasury_cap, tx_context::sender(ctx));
+    transfer::public_freeze_object(metadata);
+}
+```
+
+**特點**：
+
+-   類型名稱必須與模組名稱相同（大寫）
+-   具有 `drop` 能力
+-   確保唯一性和一次性
+
+#### 6.4 Shared Object Pattern（共享物件模式）
+
+當多個使用者需要同時存取同一個狀態時，使用共享物件模式。
+
+```move
+// 去中心化交易所的流動性池
+struct LiquidityPool has key {
+    id: UID,
+    token_a_balance: u64,
+    token_b_balance: u64,
+    total_supply: u64,
+    fee_rate: u64, // 基點，例如 30 = 0.3%
+}
+
+// 創建共享的流動性池
+public entry fun create_pool(
+    initial_a: u64,
+    initial_b: u64,
+    fee_rate: u64,
+    ctx: &mut TxContext
+) {
+    let pool = LiquidityPool {
+        id: object::new(ctx),
+        token_a_balance: initial_a,
+        token_b_balance: initial_b,
+        total_supply: initial_a * initial_b, // 簡化的初始供應量計算
+        fee_rate,
+    };
+
+    // 將池子設為共享物件
+    transfer::share_object(pool);
+}
+
+// 任何人都可以向共享池添加流動性
+public entry fun add_liquidity(
+    pool: &mut LiquidityPool,
+    amount_a: u64,
+    amount_b: u64,
+    ctx: &mut TxContext
+) {
+    // 添加流動性的邏輯
+    pool.token_a_balance = pool.token_a_balance + amount_a;
+    pool.token_b_balance = pool.token_b_balance + amount_b;
+}
+```
+
+**適用場景**：
+
+-   DEX 流動性池
+-   多人遊戲狀態
+-   投票系統
+-   拍賣平台
+
+#### 6.5 Hot Potato Pattern（燙手山芋模式）
+
+創建一個沒有 `key`, `store`, 或 `drop` 能力的結構體，強制在同一交易中處理。
+
+```move
+// 沒有存儲能力的結構體，必須在交易中被消費
+struct Request {
+    amount: u64,
+    recipient: address,
+}
+
+// 創建請求
+public fun create_request(amount: u64, recipient: address): Request {
+    Request { amount, recipient }
+}
+
+// 必須處理請求，否則交易失敗
+public fun fulfill_request(
+    request: Request,
+    vault: &mut Vault,
+    ctx: &mut TxContext
+) {
+    let Request { amount, recipient } = request; // 解構消費請求
+
+    // 處理邏輯
+    assert!(vault.balance >= amount, 0);
+    vault.balance = vault.balance - amount;
+
+    // 轉移資金給接收者
+    // ...
+}
+```
+
+**優點**：
+
+-   強制原子性操作
+-   防止請求被保存或複製
+-   確保業務邏輯的完整性
+
+#### 6.6 Composability Pattern（可組合性模式）
+
+設計可以與其他模組無縫協作的功能。
+
+```move
+// 標準化的 NFT 特徵接口
+public struct NFTTraits has store, copy, drop {
+    strength: u8,
+    agility: u8,
+    intelligence: u8,
+}
+
+// 基礎 NFT 結構
+struct GameNFT has key, store {
+    id: UID,
+    name: String,
+    traits: NFTTraits,
+}
+
+// 可組合的強化系統
+public fun enhance_nft(
+    nft: &mut GameNFT,
+    enhancement_item: EnhancementItem
+): NFTTraits {
+    let old_traits = nft.traits;
+
+    // 應用強化效果
+    nft.traits.strength = nft.traits.strength + enhancement_item.strength_boost;
+    nft.traits.agility = nft.traits.agility + enhancement_item.agility_boost;
+
+    // 消費強化道具
+    let EnhancementItem {
+        id, strength_boost: _, agility_boost: _, intelligence_boost: _
+    } = enhancement_item;
+    object::delete(id);
+
+    old_traits // 返回舊特徵用於事件發射
+}
+
+// 可組合的市場系統
+public fun list_for_sale(
+    nft: GameNFT,
+    price: u64,
+    marketplace: &mut Marketplace,
+    ctx: &mut TxContext
+) {
+    // 將 NFT 放入市場
+    let listing = Listing {
+        id: object::new(ctx),
+        nft,
+        price,
+        seller: tx_context::sender(ctx),
+    };
+
+    // 添加到市場
+    table::add(&mut marketplace.listings, object::uid_to_inner(&listing.id), listing);
+}
+```
+
+#### 6.7 Factory Pattern（工廠模式）
+
+創建標準化的物件創建機制。
+
+```move
+// NFT 工廠配置
+struct NFTFactory has key {
+    id: UID,
+    creator: address,
+    mint_fee: u64,
+    total_minted: u64,
+    max_supply: u64,
+}
+
+// 標準化的 NFT 創建
+public entry fun mint_standard_nft(
+    factory: &mut NFTFactory,
+    name: String,
+    description: String,
+    image_url: String,
+    payment: Coin<SUI>,
+    ctx: &mut TxContext
+) {
+    // 檢查供應量限制
+    assert!(factory.total_minted < factory.max_supply, 0);
+
+    // 檢查支付金額
+    assert!(coin::value(&payment) >= factory.mint_fee, 1);
+
+    // 創建標準化 NFT
+    let nft = StandardNFT {
+        id: object::new(ctx),
+        name,
+        description,
+        image_url,
+        mint_number: factory.total_minted + 1,
+        creator: factory.creator,
+    };
+
+    // 更新工廠狀態
+    factory.total_minted = factory.total_minted + 1;
+
+    // 處理支付
+    transfer::public_transfer(payment, factory.creator);
+
+    // 轉移 NFT 給鑄造者
+    transfer::public_transfer(nft, tx_context::sender(ctx));
+}
+```
+
+#### 6.8 事件發射模式（Event Emission Pattern）
+
+使用事件來追蹤重要的狀態變化，便於前端應用和索引服務。
+
+````move
+use sui::event;
+
+// 定義事件結構
+struct NFTMinted has copy, drop {
+    nft_id: ID,
+    creator: address,
+    recipient: address,
+    name: String,
+}
+
+struct NFTTransferred has copy, drop {
+    nft_id: ID,
+    from: address,
+    to: address,
+    timestamp: u64,
+}
+
+// 在關鍵操作中發射事件
+public entry fun mint_and_transfer(
     name: String,
     recipient: address,
     ctx: &mut TxContext
 ) {
-    let obj = MyObject {
+    let nft = MyNFT {
         id: object::new(ctx),
         name,
+        creator: tx_context::sender(ctx),
     };
-    transfer::public_transfer(obj, recipient);
+
+    let nft_id = object::id(&nft);
+
+    // 發射鑄造事件
+    event::emit(NFTMinted {
+        nft_id,
+        creator: tx_context::sender(ctx),
+        recipient,
+        name,
+    });
+
+    // 轉移 NFT
+    transfer::public_transfer(nft, recipient);
+
+    // 發射轉移事件
+    event::emit(NFTTransferred {
+        nft_id,
+        from: tx_context::sender(ctx),
+        to: recipient,
+        timestamp: tx_context::epoch_timestamp_ms(ctx),
+    });
 }
-```
 
-#### 6.2 物件修改模式
 
-```move
-// 物件狀態修改
-public fun update_object(obj: &mut MyObject, new_value: u64) {
-    obj.value = new_value;
-}
-```
-
-#### 6.3 物件銷毀模式
-
-```move
-// 銷毀物件並提取值
-public fun destroy_and_extract(obj: MyObject): u64 {
-    let MyObject { id, value } = obj;
-    object::delete(id);
-    value
-}
-```
 
 ### 7. 基礎語法：Abilities 能力系統
 
@@ -307,7 +624,7 @@ struct TopLevelObject has key {
     id: UID,
     data: String,
 }
-```
+````
 
 **Store 能力**：
 
