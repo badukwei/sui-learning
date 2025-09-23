@@ -26,17 +26,17 @@ module example::example {
         ];
 
         let values = vector[
-            // For `name` one can use the `Hero.name` property
+            // For `name` one can use the `ExampleNFT.name` property
             b"{name}".to_string(),
-            // For `link` one can build a URL using an `id` property
+            // For `link` one can build a URL using an `ExampleNFT.id` property
             b"{link}".to_string(),
-            // For `image_url` use an IPFS template + `image_url` property.
+            // For `image_url` one can use the `ExampleNFT.image_url` property
             b"{image_url}".to_string(),
-            // Description is static for all `Hero` objects.
+            // Description is static for all `ExampleNFT` objects.
             b"{description}".to_string(),
             // Project URL is usually static
             b"{project_url}".to_string(),
-            // Creator field can be any
+            // Creator field can be any ExampleNFT.creator
             b"{creator}".to_string(),
         ];
 
