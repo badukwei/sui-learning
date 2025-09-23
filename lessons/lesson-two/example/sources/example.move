@@ -1,34 +1,64 @@
 module example::example {
 
-    use std::string;
+    use sui::display;
+    use sui::package;
     use std::string::String;
-    use sui::transfer::transfer;
+    use sui::transfer::public_transfer;
     use sui::tx_context::sender;
 
-    public struct ExampleNFT has key {
+    public struct ExampleNFT has key, store {
         id: UID,
         name: String,
         description: String,
-        url: String,
+        image_url: String,
+    } 
+
+    public struct EXAMPLE has drop {}
+
+    fun init(otw: EXAMPLE, ctx: &mut TxContext) {
+        let keys = vector[
+            b"name".to_string(),
+            b"link".to_string(),
+            b"image_url".to_string(),
+            b"description".to_string(),
+            b"project_url".to_string(),
+            b"creator".to_string(),
+        ];
+
+        let values = vector[
+            // For `name` one can use the `Hero.name` property
+            b"{name}".to_string(),
+            // For `link` one can build a URL using an `id` property
+            b"{link}".to_string(),
+            // For `image_url` use an IPFS template + `image_url` property.
+            b"{image_url}".to_string(),
+            // Description is static for all `Hero` objects.
+            b"{description}".to_string(),
+            // Project URL is usually static
+            b"{project_url}".to_string(),
+            // Creator field can be any
+            b"{creator}".to_string(),
+        ];
+
+        let publisher = package::claim(otw, ctx);
+
+        let mut display = display::new_with_fields<ExampleNFT>(
+            &publisher, keys, values, ctx
+        );
+        
+        display.update_version();
+
+        public_transfer(publisher, ctx.sender());
+        public_transfer(display, ctx.sender());
     }
 
-    fun init(ctx: &mut TxContext) {
-        let default_nft = ExampleNFT {
-            id: object::new(ctx),
-            name: string::utf8(b"Example NFT"),
-            description: string::utf8(b"Example NFT Description"),
-            url: string::utf8(b"https://example.com"),
-        };
-        transfer(default_nft, sender(ctx));
-    }
-
-    public entry fun mint_nft(
+    entry fun mint_nft(
         name: String,
         description: String,
-        url: String,
+        image_url: String,
         ctx: &mut TxContext
     ) {
-        let nft = ExampleNFT { id: object::new(ctx), name, description, url };
-        transfer(nft, sender(ctx));
+        let nft = ExampleNFT { id: object::new(ctx), name, description, image_url };
+        public_transfer(nft, sender(ctx));
     }
 }
