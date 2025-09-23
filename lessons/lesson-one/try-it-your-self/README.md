@@ -403,9 +403,6 @@ sui client envs
 ```bash
 # 嘗試 ed25519
 sui keytool import "your mnemonic" ed25519
-
-# 如果失敗，嘗試 secp256k1
-sui keytool import "your mnemonic" secp256k1
 ```
 
 ### Q3: 餘額顯示為 0
